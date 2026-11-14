@@ -1,4 +1,3 @@
-
 const express = require("express");
 const OpenAI = require("openai");
 
@@ -31,26 +30,32 @@ app.get("/webhook", (req, res) => {
 });
 
 app.post("/webhook", async (req, res) => {
+  console.log("WEBHOOK REÇU :", JSON.stringify(req.body));
+
   res.sendStatus(200);
 
   try {
     const value = req.body.entry?.[0]?.changes?.[0]?.value;
     const message = value?.messages?.[0];
 
-    if (!message || message.type !== "text") return;
+    if (!message || message.type !== "text") {
+      console.log("Aucun message texte à traiter.");
+      return;
+    }
 
-    const userMessage = message.text.body;
-    const userNumber = message.from;
+    console.log("MESSAGE REÇU :", message.text.body);
 
     const response = await openai.responses.create({
       model: "gpt-4.1-mini",
       instructions: "Tu es JARVIS, un assistant intelligent, utile et amical. Réponds en français.",
-      input: userMessage
+      input: message.text.body
     });
 
     const answer = response.output_text || "Désolé, je n'ai pas pu répondre.";
 
-    await fetch(
+    console.log("RÉPONSE OPENAI :", answer);
+
+    const result = await fetch(
       `https://graph.facebook.com/${GRAPH_VERSION}/${PHONE_NUMBER_ID}/messages`,
       {
         method: "POST",
@@ -60,16 +65,23 @@ app.post("/webhook", async (req, res) => {
         },
         body: JSON.stringify({
           messaging_product: "whatsapp",
-          to: userNumber,
+          to: message.from,
           type: "text",
           text: { body: answer }
         })
       }
     );
+
+    console.log("RÉSULTAT WHATSAPP :", await result.text());
+
   } catch (error) {
-    console.error("Erreur JARVIS :", error.message);
+    console.error("ERREUR JARVIS :", error.message);
+    console.error("CODE :", error.code);
+    console.error("STATUT :", error.status);
   }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("JARVIS démarré sur le port " + PORT));
+app.listen(PORT, () => {
+  console.log("JARVIS démarré sur le port " + PORT);
+});
